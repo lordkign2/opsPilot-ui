@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -14,10 +14,13 @@ import {
   User,
   MapPin,
   Clock,
-  ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { useOrderDetail, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { useCustomerDetail } from '@/hooks/useCustomers';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -26,10 +29,72 @@ interface PageProps {
 export default function OrderDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { id } = use(params);
-  const orderId = id ? `ORD-${id.toUpperCase()}` : 'ORD-2023-8842';
 
-  const [orderStatus, setOrderStatus] = useState('Delivered');
-  const [assignedStaff, setAssignedStaff] = useState('Amina O. (Warehouse)');
+  // Fetch dynamic order details
+  const { data: order, isLoading: orderLoading, error: orderError } = useOrderDetail(id);
+  
+  // Fetch dynamic customer details based on customer_id
+  const { data: customer, isLoading: customerLoading } = useCustomerDetail(order?.customer_id || null);
+
+  const updateStatusMutation = useUpdateOrderStatus();
+  const [orderStatus, setOrderStatus] = useState('pending');
+
+  useEffect(() => {
+    if (order?.status) {
+      setOrderStatus(order.status);
+    }
+  }, [order?.status]);
+
+  const handleStatusChange = async (newStatus: string) => {
+    setOrderStatus(newStatus);
+    try {
+      await updateStatusMutation.mutateAsync({ orderId: id, status: newStatus });
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+    }
+  };
+
+  if (orderLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span className="text-xs text-text-secondary">Loading operations order telemetry...</span>
+      </div>
+    );
+  }
+
+  if (orderError || !order) {
+    return (
+      <div className="p-8 text-center text-xs text-danger glass-card rounded-custom-md border border-white/5 bg-slate-900/10 space-y-4 max-w-md mx-auto mt-12">
+        <AlertTriangle className="w-8 h-8 text-danger mx-auto" />
+        <p className="font-semibold text-white">Order Record Unavailable</p>
+        <p className="text-text-secondary leading-relaxed">
+          The requested order ID could not be loaded. Please ensure the backend server is active.
+        </p>
+        <Link href="/orders" className="inline-block mt-2">
+          <Button variant="outline" size="sm">Back to Queue</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const orderNumber = `ORD-${order.id.slice(0, 8).toUpperCase()}`;
+  const subtotal = order.total_amount / 1.075;
+  const vat = order.total_amount - subtotal;
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'bg-success/15 border border-success/30 text-success';
+      case 'processing':
+        return 'bg-primary/15 border border-primary/30 text-primary';
+      case 'cancelled':
+        return 'bg-danger/15 border border-danger/30 text-danger';
+      case 'pending':
+      default:
+        return 'bg-warning/15 border border-warning/30 text-warning';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -41,9 +106,9 @@ export default function OrderDetailPage({ params }: PageProps) {
               <ArrowLeft className="w-5 h-5" />
             </button>
           </Link>
-          <h1 className="text-lg font-bold text-white tracking-wide font-mono">{orderId}</h1>
-          <span className="inline-flex items-center bg-success/15 border border-success/30 text-success text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-            Fulfilled
+          <h1 className="text-lg font-bold text-white tracking-wide font-mono">{orderNumber}</h1>
+          <span className={`inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${getStatusBadgeClass(order.status)}`}>
+            {order.status}
           </span>
         </div>
         
@@ -72,48 +137,27 @@ export default function OrderDetailPage({ params }: PageProps) {
                 <Package className="w-4 h-4 text-primary" />
                 <span>Line Items</span>
               </h2>
-              <span className="text-[10px] text-text-muted">3 Items</span>
+              <span className="text-[10px] text-text-muted">1 Item</span>
             </div>
 
             {/* List */}
             <div className="space-y-4">
-              {/* Item 1 */}
               <div className="flex items-center justify-between text-xs py-2 border-b border-white/5 last:border-0 pb-4">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-custom-sm bg-slate-950/40 border border-white/10 flex items-center justify-center text-text-secondary">
                     <Package className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="font-semibold text-white block">Industrial AI Sensor Module V2</span>
-                    <span className="text-[10px] text-text-muted mt-0.5 block font-mono">SKU: SN-AI-002</span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-12 text-right">
-                  <div className="text-text-muted font-mono">
-                    Qty: <span className="text-white">2</span>
-                  </div>
-                  <div className="text-text-secondary font-mono">₦145,000</div>
-                  <div className="text-white font-bold font-mono w-24 text-right">₦290,000</div>
-                </div>
-              </div>
-
-              {/* Item 2 */}
-              <div className="flex items-center justify-between text-xs py-2 border-b border-white/5 last:border-0 pb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-custom-sm bg-slate-950/40 border border-white/10 flex items-center justify-center text-text-secondary">
-                    <Package className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white block">Edge Gateway Router</span>
-                    <span className="text-[10px] text-text-muted mt-0.5 block font-mono">SKU: GW-ED-001</span>
+                    <span className="font-semibold text-white block">Enterprise Operations Checkout</span>
+                    <span className="text-[10px] text-text-muted mt-0.5 block font-mono">SKU: OP-ENTERPRISE-POS</span>
                   </div>
                 </div>
                 <div className="flex items-center space-x-12 text-right">
                   <div className="text-text-muted font-mono">
                     Qty: <span className="text-white">1</span>
                   </div>
-                  <div className="text-text-secondary font-mono">₦85,000</div>
-                  <div className="text-white font-bold font-mono w-24 text-right">₦85,000</div>
+                  <div className="text-text-secondary font-mono">₦ {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-white font-bold font-mono w-24 text-right">₦ {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
               </div>
             </div>
@@ -122,19 +166,15 @@ export default function OrderDetailPage({ params }: PageProps) {
             <div className="bg-slate-950/30 border border-white/5 rounded-custom-sm p-4 space-y-2.5 text-xs text-text-secondary w-full max-w-[360px] ml-auto">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span className="font-mono text-white">₦375,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Shipping (Express Logistics)</span>
-                <span className="font-mono text-white">₦15,000</span>
+                <span className="font-mono text-white">₦ {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
                 <span>VAT (7.5%)</span>
-                <span className="font-mono text-white">₦28,125</span>
+                <span className="font-mono text-white">₦ {vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between border-t border-white/5 pt-2.5 text-sm font-bold text-white">
                 <span>Total</span>
-                <span className="font-mono text-primary shadow-[0_0_10px_rgba(0,245,255,0.05)]">₦418,125</span>
+                <span className="font-mono text-primary shadow-[0_0_10px_rgba(0,245,255,0.05)]">₦ {order.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
@@ -148,39 +188,18 @@ export default function OrderDetailPage({ params }: PageProps) {
 
             {/* Vertical timeline */}
             <div className="relative border-l border-white/5 ml-3.5 pl-6 space-y-6 text-xs">
-              {/* Event 1 */}
               <div className="relative">
-                <span className="absolute -left-[31px] top-0.5 flex h-4 w-4 rounded-full bg-success items-center justify-center border border-slate-950 shadow-[0_0_8px_#10B981]">
+                <span className={`absolute -left-[31px] top-0.5 flex h-4 w-4 rounded-full items-center justify-center border border-slate-950 ${order.status === 'completed' ? 'bg-success' : 'bg-primary'}`}>
                   <span className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
                 </span>
                 <div className="space-y-1">
-                  <span className="font-bold text-white block">Order Delivered</span>
-                  <span className="text-[10px] text-text-secondary leading-relaxed block">Package signed by recipient.</span>
-                  <span className="text-[10px] text-text-muted block font-mono">Oct 26, 09:15 WAT</span>
-                </div>
-              </div>
-
-              {/* Event 2 */}
-              <div className="relative">
-                <span className="absolute -left-[31px] top-0.5 flex h-4 w-4 rounded-full bg-primary items-center justify-center border border-slate-950">
-                  <span className="w-1.5 h-1.5 bg-slate-950 rounded-full animate-ping" />
-                </span>
-                <div className="space-y-1">
-                  <span className="font-bold text-white block">Out for Delivery</span>
-                  <span className="text-[10px] text-text-secondary leading-relaxed block">Handed over to Express Logistics dispatch.</span>
-                  <span className="text-[10px] text-text-muted block font-mono">Oct 25, 08:30 WAT</span>
-                </div>
-              </div>
-
-              {/* Event 3 */}
-              <div className="relative">
-                <span className="absolute -left-[31px] top-0.5 flex h-4 w-4 rounded-full bg-primary/20 items-center justify-center border border-slate-950">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full" />
-                </span>
-                <div className="space-y-1">
-                  <span className="font-bold text-white block">Order Placed</span>
-                  <span className="text-[10px] text-text-secondary leading-relaxed block">Payment verified and order created.</span>
-                  <span className="text-[10px] text-text-muted block font-mono">Oct 24, 14:32 WAT</span>
+                  <span className="font-bold text-white block">Order Status: {order.status.toUpperCase()}</span>
+                  <span className="text-[10px] text-text-secondary leading-relaxed block">
+                    {order.notes || 'Transaction checkout recorded in operation logs.'}
+                  </span>
+                  <span className="text-[10px] text-text-muted block font-mono">
+                    {new Date(order.created_at).toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
@@ -193,12 +212,12 @@ export default function OrderDetailPage({ params }: PageProps) {
                 <CheckCircle className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-white">Fully Paid</h3>
-                <span className="text-xs text-text-secondary block">No outstanding balance.</span>
+                <h3 className="text-sm font-bold text-white">Payment Recorded</h3>
+                <span className="text-xs text-text-secondary block">Transaction successfully written to ledger.</span>
                 <div className="grid grid-cols-3 gap-6 text-[10px] text-text-secondary pt-2">
-                  <div>Method: <span className="text-white block font-semibold mt-0.5">Bank Transfer</span></div>
-                  <div>Transaction ID: <span className="text-white block font-mono mt-0.5">TRX-9982-AB</span></div>
-                  <div>Processed By: <span className="text-white block font-semibold mt-0.5">Paystack Gateway</span></div>
+                  <div>Amount: <span className="text-white block font-semibold mt-0.5">₦ {order.total_amount.toLocaleString()}</span></div>
+                  <div>Status: <span className="text-white block font-mono mt-0.5">Approved</span></div>
+                  <div>Gateway: <span className="text-white block font-semibold mt-0.5">Paystack Gateway</span></div>
                 </div>
               </div>
             </div>
@@ -219,16 +238,27 @@ export default function OrderDetailPage({ params }: PageProps) {
               <User className="w-4 h-4 text-primary" />
               <span>Customer Profile</span>
             </h2>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                CO
+            {customerLoading ? (
+              <div className="flex items-center space-x-2 text-xs text-text-secondary">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>Fetching customer profile...</span>
               </div>
-              <div className="text-xs">
-                <span className="font-bold text-white block">Chidi Okafor</span>
-                <span className="text-[10px] text-text-secondary block mt-0.5">chidi.o@techworks.ng</span>
-                <span className="text-[10px] text-text-secondary block mt-0.5 font-mono">+234 803 123 4567</span>
+            ) : customer ? (
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                  {customer.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="text-xs">
+                  <span className="font-bold text-white block">{customer.name}</span>
+                  <span className="text-[10px] text-text-secondary block mt-0.5">{customer.email || 'No email registered'}</span>
+                  <span className="text-[10px] text-text-secondary block mt-0.5 font-mono">{customer.phone}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-xs text-text-muted">
+                No customer profile resolved for this order ID.
+              </div>
+            )}
           </div>
 
           {/* Card 2: Shipping Address */}
@@ -259,59 +289,24 @@ export default function OrderDetailPage({ params }: PageProps) {
                 <div className="relative">
                   <select
                     value={orderStatus}
-                    onChange={(e) => setOrderStatus(e.target.value)}
-                    className="w-full glass-input px-3.5 py-2 text-xs rounded-custom-sm appearance-none cursor-pointer pr-10"
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    disabled={updateStatusMutation.isPending}
+                    className="w-full glass-input px-3.5 py-2.5 text-xs rounded-custom-sm appearance-none cursor-pointer pr-10 disabled:opacity-55"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="Processing">Processing</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
                   </select>
-                  <ChevronDown className="w-4 h-4 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Control 2 */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-baseline">
-                  <label className="block text-[10px] font-semibold text-text-secondary uppercase tracking-wider">
-                    Assigned Staff
-                  </label>
-                  <button className="text-[10px] text-primary hover:underline font-bold cursor-pointer">
-                    Change
-                  </button>
-                </div>
-                <div className="flex items-center justify-between glass-input px-3.5 py-2.5 rounded-custom-sm border border-white/5 bg-slate-900/40 text-xs">
-                  <span className="text-text-primary font-medium">{assignedStaff}</span>
+                  {updateStatusMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 text-primary absolute right-3 top-1/2 -translate-y-1/2 animate-spin" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  )}
                 </div>
               </div>
             </div>
           </div>
-
-          {/* Card 4: Recent History */}
-          <div className="glass-card rounded-custom-md border border-white/5 bg-slate-900/10 p-5 space-y-4">
-            <h2 className="text-xs font-bold text-white uppercase tracking-wider border-b border-white/5 pb-2">
-              Recent History
-            </h2>
-            <div className="space-y-2.5 text-xs">
-              {[
-                { id: 'ORD-2023-7102', date: 'Sep 15, 2023', status: 'DELIVERED', color: 'text-success bg-success/10 border-success/20' },
-                { id: 'ORD-2023-5521', date: 'Jul 02, 2023', status: 'DELIVERED', color: 'text-success bg-success/10 border-success/20' },
-                { id: 'ORD-2023-4199', date: 'May 18, 2023', status: 'REFUNDED', color: 'text-text-muted bg-white/5 border-white/10' }
-              ].map((past) => (
-                <div key={past.id} className="flex justify-between items-center py-1 border-b border-white/5 last:border-0 pb-2.5">
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-white font-mono block hover:text-primary cursor-pointer">{past.id}</span>
-                    <span className="text-[10px] text-text-muted block font-mono">{past.date}</span>
-                  </div>
-                  <span className={`inline-flex items-center text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${past.color}`}>
-                    {past.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>
 
       </div>

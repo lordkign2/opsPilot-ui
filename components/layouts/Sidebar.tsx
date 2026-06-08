@@ -2,18 +2,33 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, ShoppingCart, CreditCard, MessageSquare, BarChart2, Settings, ChevronLeft, ChevronRight, Rocket } from 'lucide-react';
+import {
+  Home,
+  Users,
+  ShoppingCart,
+  CreditCard,
+  MessageSquare,
+  BarChart2,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Rocket,
+  Store,
+  Package,
+  Lock,
+  HelpCircle
+} from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Customers', href: '/customers', icon: Users },
+  { name: 'Inventory', href: '/inventory', icon: Package },
+  { name: 'POS', href: '/pos', icon: Store },
   { name: 'Orders', href: '/orders', icon: ShoppingCart },
-  { name: 'Payments', href: '/payments', icon: CreditCard },
+  { name: 'Customers', href: '/customers', icon: Users },
   { name: 'AI Assistant', href: '/ai', icon: MessageSquare },
   { name: 'Analytics', href: '/analytics', icon: BarChart2 },
-  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -28,15 +43,20 @@ export default function Sidebar() {
       )}
     >
       {/* Header / Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-white/5 justify-between">
-        <Link href="/" className="flex items-center space-x-2.5 overflow-hidden">
+      <div className="h-20 flex flex-col justify-center px-4 border-b border-white/5 overflow-hidden">
+        <Link href="/" className="flex items-center space-x-2.5">
           <div className="w-8 h-8 min-w-[32px] rounded-custom-sm bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_10px_rgba(0,245,255,0.05)]">
             <Rocket className="w-4 h-4 text-primary" />
           </div>
           {!isCollapsed && (
-            <span className="text-md font-bold tracking-wider text-white uppercase animate-fade-in">
-              OpsPilot
-            </span>
+            <div className="flex flex-col">
+              <span className="text-base font-black tracking-wider text-white uppercase font-sans leading-none">
+                OpsPilot
+              </span>
+              <span className="text-[8px] font-bold text-text-muted tracking-widest uppercase mt-1">
+                MISSION CONTROL
+              </span>
+            </div>
           )}
         </Link>
       </div>
@@ -78,8 +98,49 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Collapse Toggle Button */}
-      <div className="p-3 border-t border-white/5 flex justify-end">
+      {/* Bottom Area: Open Register & Settings/Support */}
+      <div className="p-3 border-t border-white/5 space-y-3">
+        {/* Open Register */}
+        <button
+          className={cn(
+            "w-full py-2.5 flex items-center justify-center rounded-custom-md border transition-all duration-200 text-xs font-semibold cursor-pointer",
+            "bg-slate-900/40 border-white/5 text-white hover:bg-white/5 hover:border-white/10"
+          )}
+        >
+          <Lock className="w-4 h-4 mr-2 text-text-secondary" />
+          {!isCollapsed && <span>Open Register</span>}
+        </button>
+
+        {/* Settings / Support Row */}
+        {!isCollapsed ? (
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-text-secondary">
+            <Link
+              href="/settings"
+              className="flex flex-col items-center justify-center py-2 rounded-custom-sm border border-transparent hover:border-white/5 hover:bg-white/5 hover:text-white transition-all duration-200"
+            >
+              <Settings className="w-4 h-4 mb-1" />
+              <span>Settings</span>
+            </Link>
+            <button
+              className="flex flex-col items-center justify-center py-2 rounded-custom-sm border border-transparent hover:border-white/5 hover:bg-white/5 hover:text-white transition-all duration-200 cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4 mb-1" />
+              <span>Support</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center space-y-2">
+            <Link
+              href="/settings"
+              className="p-2 rounded hover:bg-white/5 text-text-secondary hover:text-white"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
+          </div>
+        )}
+
+        {/* Collapse Toggle Button */}
         <button
           onClick={toggleCollapsed}
           className="w-full py-1.5 flex items-center justify-center rounded-custom-sm text-text-secondary hover:text-text-primary hover:bg-white/5 cursor-pointer border border-white/5 bg-[#0b1120]"
@@ -97,4 +158,5 @@ export default function Sidebar() {
     </aside>
   );
 }
+
 
