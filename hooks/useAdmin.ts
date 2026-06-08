@@ -21,6 +21,7 @@ export interface SystemHealthData {
 export interface SystemLog {
   id: string;
   action: string;
+  module?: string;
   actor_id?: string;
   actor_email?: string;
   details?: Record<string, any>;
