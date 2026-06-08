@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useAdminSystemHealth, useAdminSystemLogs, useWebSocketSessions } from '@/hooks/useAdmin';
-import { Activity, Clock, Users, ShieldCheck, Play, Server, Database, Layers, Search, RefreshCw } from 'lucide-react';
+import { Clock, Users, ShieldCheck, Activity, Server, Database, Search, RefreshCw } from 'lucide-react';
 
 export default function SystemTelemetry() {
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useAdminSystemHealth();
-  const { data: systemLogs, isLoading: isLogsLoading, refetch: refetchLogs } = useAdminSystemLogs(10, 0);
+  const { data: systemLogs, isLoading: isLogsLoading, refetch: refetchLogs } = useAdminSystemLogs(50, 0);
   const { data: wsSessions } = useWebSocketSessions();
 
   const handleRefresh = () => {
@@ -15,49 +14,41 @@ export default function SystemTelemetry() {
   };
 
   // Live values
-  const activeWSClients = wsSessions?.length || health?.websockets?.active_connections || 12482;
-  const pgLatency = health?.postgres?.status === 'healthy' ? `${health.postgres.latency_ms || 42} ms` : 'Offline';
-  const cpuPercent = health?.system?.cpu_percent ? Math.round(health.system.cpu_percent) : 68;
-  const memoryPercent = health?.system?.memory_percent ? Math.round(health.system.memory_percent) : 74;
-  const memoryUsedGB = health?.system?.memory_used_gb ? health.system.memory_used_gb.toFixed(1) : '8.1';
-
-  // Mock fallbacks for the Live Firehose
-  const mockFirehose = [
-    { timestamp: '14:02:01', level: 'ERR', message: 'Tenant 0x4f: Timeout waiting for model inference response. Trace ID: a7b9-44f2' },
-    { timestamp: '14:02:05', level: 'WARN', message: 'High memory pressure detected on worker node w-us-east-4a (89% utilization).' },
-    { timestamp: '14:02:12', level: 'ERR', message: 'Failed to establish WebSocket connection with client id cx-889. Connection reset by peer.' },
-    { timestamp: '14:02:15', level: 'INFO', message: 'Auto-scaling triggered. Spinning up 2 additional inference instances.' },
-  ];
+  const activeWSClients = wsSessions !== undefined ? wsSessions.length : (health?.metrics?.websocket_sessions !== undefined ? health.metrics.websocket_sessions : null);
+  const cpuPercent = health?.metrics?.cpu_usage_percent !== undefined ? Math.round(health.metrics.cpu_usage_percent) : null;
+  const memoryPercent = health?.metrics?.memory_usage_percent !== undefined ? Math.round(health.metrics.memory_usage_percent) : null;
+  const pgStatus = health?.services?.postgres || null;
+  const redisStatus = health?.services?.redis || null;
 
   const hasLogsData = systemLogs && systemLogs.length > 0;
   const logsList = hasLogsData
     ? systemLogs.map((log) => {
-        const time = new Date(log.created_at).toLocaleTimeString();
+        const time = log.created_at ? new Date(log.created_at).toLocaleTimeString() : '—';
         let level = 'INFO';
-        if (log.action.includes('error') || log.action.includes('failed') || log.action.includes('delete')) {
+        if (log.action.includes('error') || log.action.includes('failed') || log.action.includes('delete') || log.action.includes('purge')) {
           level = 'ERR';
-        } else if (log.action.includes('toggle') || log.action.includes('update')) {
+        } else if (log.action.includes('toggle') || log.action.includes('update') || log.action.includes('role')) {
           level = 'WARN';
         }
         return {
           timestamp: time,
           level,
-          message: `${log.action.toUpperCase()} - Actor: ${log.actor_email || 'System'} | details: ${JSON.stringify(log.details || {})}`,
+          message: `${log.action.toUpperCase()} | Module: ${log.module} | Actor ID: ${log.actor_id || 'System'} | IP: ${log.ip_address || 'Internal'}`,
         };
       })
-    : mockFirehose;
+    : [];
 
   return (
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
         <div>
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">System Telemetry</h2>
             <span className="bg-success/10 border border-success/35 text-success text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-widest flex items-center">
-              <span className="w-1 h-1 rounded-full bg-success mr-1.5 animate-ping" />
-              SYSTEM NOMINAL
+              <span className={`w-1 h-1 rounded-full mr-1.5 ${health?.status === 'healthy' ? 'bg-success animate-ping' : 'bg-warning'}`} />
+              SYSTEM {health?.status === 'healthy' ? 'NOMINAL' : health?.status ? health.status.toUpperCase() : 'UNKNOWN'}
             </span>
           </div>
           <p className="text-xs text-text-secondary mt-1">Real-time telemetry, server compute metrics, and compliance error logs stream.</p>
@@ -94,8 +85,8 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">{pgLatency}</h3>
-            <span className="text-[9px] font-bold text-warning mt-1.5 inline-block">Postgres DB connection</span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide">—</h3>
+            <span className="text-[9px] text-text-muted mt-1.5 block">Endpoint not connected (null)</span>
           </div>
         </div>
 
@@ -108,10 +99,10 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">{activeWSClients.toLocaleString()}</h3>
-            <span className="text-[9px] font-bold text-success mt-1.5 inline-flex items-center">
-              <span>↑ 5% WebSocket sessions</span>
-            </span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide">
+              {activeWSClients !== null ? activeWSClients.toLocaleString() : '—'}
+            </h3>
+            <span className="text-[9px] text-success mt-1.5 block">Active WebSocket clients</span>
           </div>
         </div>
 
@@ -124,8 +115,8 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">0.04%</h3>
-            <span className="text-[9px] font-bold text-text-muted mt-1.5 inline-block">API execution errors</span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide">—</h3>
+            <span className="text-[9px] text-text-muted mt-1.5 block">Metrics endpoint offline (null)</span>
           </div>
         </div>
 
@@ -138,8 +129,10 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">99.99%</h3>
-            <span className="text-[9px] font-bold text-success mt-1.5 inline-block">All nodes fully healthy</span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide uppercase">
+              {pgStatus === 'connected' && redisStatus === 'connected' ? 'Healthy' : 'Degraded'}
+            </h3>
+            <span className="text-[9px] text-success mt-1.5 block">Postgres & Redis connected</span>
           </div>
         </div>
       </div>
@@ -147,33 +140,18 @@ export default function SystemTelemetry() {
       {/* Latency and Resource Metrics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Latency Distribution graph */}
-        <div className="lg:col-span-8 glass-card bg-slate-900/10 border border-white/5 rounded-custom-lg p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6 select-none">
+        {/* Latency Distribution graph placeholder */}
+        <div className="lg:col-span-8 glass-card bg-slate-900/10 border border-white/5 rounded-custom-lg p-6 flex flex-col select-none">
+          <div className="flex justify-between items-center mb-6">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">API Latency Distribution</h3>
-            <div className="flex space-x-1.5 bg-slate-950/40 p-0.5 rounded border border-white/5 text-[9px] font-bold text-text-secondary">
-              <button className="px-2 py-0.5 rounded">1h</button>
-              <button className="px-2 py-0.5 rounded bg-white/5 text-white">24h</button>
-              <button className="px-2 py-0.5 rounded">7d</button>
-            </div>
           </div>
 
-          <div className="flex-1 min-h-[200px] flex items-end justify-between relative bg-slate-950/20 rounded border border-white/5 p-4 overflow-hidden">
-            {/* Draw a wave representation using flex divs */}
-            <div className="absolute inset-0 opacity-10 pointer-events-none"
-                 style={{
-                   backgroundImage: 'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
-                   backgroundSize: '20px 20px',
-                 }}
-            />
-
-            <div className="w-full h-32 flex items-end space-x-1 border-b border-white/5 select-none relative z-10">
-              {[22, 24, 21, 18, 15, 12, 18, 26, 38, 48, 72, 84, 84, 52, 28, 12, 8, 14, 21, 26, 24].map((hVal, idx) => (
-                <div key={idx} className="flex-1 flex flex-col justify-end h-full">
-                  <div className="w-full bg-warning/20 hover:bg-warning/40 rounded-t-custom-sm transition-all" style={{ height: `${hVal}%` }} />
-                </div>
-              ))}
-            </div>
+          <div className="flex-1 min-h-[200px] flex flex-col items-center justify-center bg-slate-950/20 rounded border border-white/5 p-6">
+            <Clock className="w-8 h-8 text-text-muted mb-2 opacity-50" />
+            <p className="text-xs text-white font-semibold uppercase tracking-wider">Latency Stream Offline</p>
+            <p className="text-[10px] text-text-secondary max-w-sm text-center mt-1">
+              Hourly latency distribution tracking endpoint is not connected (null). Latency curves cannot be populated.
+            </p>
           </div>
         </div>
 
@@ -188,11 +166,12 @@ export default function SystemTelemetry() {
             {/* Circular Load Meter */}
             <div className="flex flex-col items-center justify-center py-4">
               <div className="relative w-28 h-28 flex items-center justify-center border-4 border-slate-950 bg-slate-950/40 rounded-full shadow-[0_0_20px_rgba(0,245,255,0.05)]">
-                {/* Simulated circle border glow */}
                 <div className="absolute inset-0 rounded-full border border-primary/20 animate-pulse" />
                 <div className="flex flex-col items-center">
-                  <span className="text-2xl font-black text-white font-mono tracking-wide">{cpuPercent}%</span>
-                  <span className="text-[8px] font-bold text-text-muted uppercase tracking-widest mt-0.5">LOAD</span>
+                  <span className="text-2xl font-black text-white font-mono tracking-wide">
+                    {cpuPercent !== null ? `${cpuPercent}%` : '—'}
+                  </span>
+                  <span className="text-[8px] font-bold text-text-muted uppercase tracking-widest mt-0.5">CPU LOAD</span>
                 </div>
               </div>
             </div>
@@ -201,31 +180,29 @@ export default function SystemTelemetry() {
             <div className="space-y-3 pt-2">
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] uppercase font-bold text-text-secondary">
-                  <span>Redis Cache</span>
-                  <span className="font-mono text-white">4.2 GB</span>
+                  <span>Redis Cache Memory</span>
+                  <span className="font-mono text-white">—</span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-white/5">
-                  <div className="bg-warning h-full" style={{ width: '45%' }} />
-                </div>
+                <div className="w-full bg-slate-950 rounded-full h-1.5 border border-white/5 opacity-50" />
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] uppercase font-bold text-text-secondary">
-                  <span>Postgres DB</span>
-                  <span className="font-mono text-white">12.8 GB</span>
+                  <span>Postgres Database Memory</span>
+                  <span className="font-mono text-white">—</span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-white/5">
-                  <div className="bg-[#10b981] h-full" style={{ width: '65%' }} />
-                </div>
+                <div className="w-full bg-slate-950 rounded-full h-1.5 border border-white/5 opacity-50" />
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] uppercase font-bold text-text-secondary">
-                  <span>App Servers</span>
-                  <span className="font-mono text-white">{memoryUsedGB} GB</span>
+                  <span>Web App Server Memory</span>
+                  <span className="font-mono text-white">
+                    {memoryPercent !== null ? `${memoryPercent}%` : '—'}
+                  </span>
                 </div>
                 <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-white/5">
-                  <div className="bg-primary h-full" style={{ width: `${memoryPercent}%` }} />
+                  <div className="bg-primary h-full animate-pulse" style={{ width: `${memoryPercent || 0}%` }} />
                 </div>
               </div>
             </div>
@@ -237,28 +214,36 @@ export default function SystemTelemetry() {
       <div className="glass-card bg-slate-900/10 border border-white/5 rounded-custom-lg p-5">
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5 select-none">
           <div className="flex items-center space-x-2">
-            <Database className="w-4.5 h-4.5 text-danger" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Live Firehose (Error Stream)</h3>
+            <Database className="w-4.5 h-4.5 text-danger animate-pulse" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Live SOC2 Audit Firehose (System Logs)</h3>
           </div>
         </div>
 
-        <div className="bg-slate-950/80 border border-white/5 rounded p-4 font-mono text-[11px] leading-relaxed text-text-secondary overflow-y-auto max-h-[200px] select-text">
-          {logsList.map((log, idx) => (
-            <div key={idx} className="flex py-1 border-b border-white/5 last:border-0">
-              <span className="text-text-muted select-none mr-4">{log.timestamp}</span>
-              <span className={`font-bold select-none mr-4 ${
-                log.level === 'ERR' 
-                  ? 'text-danger' 
-                  : log.level === 'WARN' 
-                  ? 'text-warning' 
-                  : 'text-primary'
-              }`}>
-                [{log.level}]
-              </span>
-              <span className="flex-1 text-white/95">{log.message}</span>
-            </div>
-          ))}
-        </div>
+        {isLogsLoading ? (
+          <div className="flex justify-center items-center py-6 text-xs text-text-muted">Loading logs...</div>
+        ) : logsList.length > 0 ? (
+          <div className="bg-slate-950/80 border border-white/5 rounded p-4 font-mono text-[10px] leading-relaxed text-text-secondary overflow-y-auto max-h-[200px] select-text">
+            {logsList.map((log, idx) => (
+              <div key={idx} className="flex py-1 border-b border-white/5 last:border-0 hover:bg-white/5 px-1 rounded transition-colors">
+                <span className="text-text-muted select-none mr-4 font-bold">{log.timestamp}</span>
+                <span className={`font-bold select-none mr-4 ${
+                  log.level === 'ERR' 
+                    ? 'text-danger' 
+                    : log.level === 'WARN' 
+                    ? 'text-warning' 
+                    : 'text-primary'
+                }`}>
+                  [{log.level}]
+                </span>
+                <span className="flex-1 text-white/90">{log.message}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-xs text-text-muted bg-slate-950/40 rounded border border-white/5">
+            No compliance log runs found on the backend system logs feed.
+          </div>
+        )}
       </div>
 
     </div>

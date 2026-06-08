@@ -6,14 +6,15 @@ import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
 export interface SystemHealthData {
   status: string;
-  postgres: { status: string; latency_ms: number };
-  redis: { status: string; keys_cached: number };
-  websockets: { active_connections: number };
-  system: {
-    cpu_percent: number;
-    memory_used_gb: number;
-    memory_total_gb: number;
-    memory_percent: number;
+  timestamp: string;
+  services: {
+    postgres: 'connected' | 'disconnected';
+    redis: 'connected' | 'disconnected';
+  };
+  metrics: {
+    websocket_sessions: number;
+    memory_usage_percent: number;
+    cpu_usage_percent: number;
   };
 }
 
