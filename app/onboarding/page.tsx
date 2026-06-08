@@ -51,10 +51,15 @@ const INDUSTRIES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
   const [loading, setLoading] = useState(false);
   const [businessId, setBusinessId] = useState<string | null>(null);
+
+  const handleCancel = () => {
+    logout();
+    router.push('/login');
+  };
 
   // Form State
   const [businessName, setBusinessName] = useState('');
@@ -181,8 +186,16 @@ export default function OnboardingPage() {
           </div>
           <span className="text-md font-bold tracking-tight text-white uppercase">OpsPilot</span>
         </div>
-        <div className="text-xs text-text-muted">
-          Logged in as: <span className="text-text-secondary">{user?.email}</span>
+        <div className="flex items-center space-x-4">
+          <div className="text-xs text-text-muted">
+            Logged in as: <span className="text-text-secondary">{user?.email}</span>
+          </div>
+          <button
+            onClick={handleCancel}
+            className="text-xs text-danger hover:underline font-semibold border border-danger/20 hover:border-danger/40 bg-danger/5 px-2.5 py-1 rounded transition-all cursor-pointer"
+          >
+            Cancel Setup
+          </button>
         </div>
       </div>
 
@@ -783,7 +796,9 @@ export default function OnboardingPage() {
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-6 border-t border-white/5">
                 {currentStep === 1 ? (
-                  <div />
+                  <Button variant="ghost" onClick={handleCancel} className="text-danger hover:text-danger hover:bg-danger/5 border border-danger/10">
+                    Cancel Setup
+                  </Button>
                 ) : (
                   <Button variant="ghost" onClick={handlePrevStep} className="flex items-center space-x-2">
                     <ArrowLeft className="w-4 h-4" />
