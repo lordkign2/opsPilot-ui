@@ -16,13 +16,15 @@ import {
   Store,
   Package,
   Lock,
-  HelpCircle
+  HelpCircle,
+  GitBranch
 } from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Workflows', href: '/workflows', icon: GitBranch },
   { name: 'Inventory', href: '/inventory', icon: Package },
   { name: 'POS', href: '/pos', icon: Store },
   { name: 'Orders', href: '/orders', icon: ShoppingCart },
