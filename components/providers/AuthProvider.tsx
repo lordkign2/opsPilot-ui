@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
+import apiClient from '@/lib/api/client';
+import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -10,33 +12,78 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const { isAuthenticated, user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isBizChecked, setIsBizChecked] = useState(false);
+  const [isBizInitialized, setIsBizInitialized] = useState(false);
 
   // Set mounted flag to avoid hydration differences
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch business initialization state
   useEffect(() => {
     if (!mounted) return;
 
-    const token = localStorage.getItem('access_token');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const hasAuth = !!token;
 
-    // Define public routes
+    if (!hasAuth) {
+      setIsBizChecked(true);
+      setIsBizInitialized(false);
+      setLoading(false);
+      return;
+    }
+
+    if (user?.role === 'super_admin') {
+      setIsBizChecked(true);
+      setIsBizInitialized(true);
+      setLoading(false);
+      return;
+    }
+
+    const checkBusiness = async () => {
+      try {
+        const response = await apiClient.get(API_ENDPOINTS.BUSINESSES.CURRENT);
+        if (response.data?.data) {
+          const biz = response.data.data;
+          // If the business has an industry selected, it is initialized!
+          if (biz.industry) {
+            setIsBizInitialized(true);
+          } else {
+            setIsBizInitialized(false);
+          }
+        } else {
+          setIsBizInitialized(false);
+        }
+      } catch (err) {
+        console.error('Failed to verify business state', err);
+        setIsBizInitialized(false);
+      } finally {
+        setIsBizChecked(true);
+      }
+    };
+
+    checkBusiness();
+  }, [isAuthenticated, user, pathname, mounted]);
+
+  // Handle routing redirects based on auth and initialization states
+  useEffect(() => {
+    if (!mounted || !isBizChecked) return;
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const hasAuth = !!token;
     const isPublicRoute = pathname === '/login';
 
     if (!hasAuth && !isPublicRoute) {
       router.replace('/login');
     } else if (hasAuth && isPublicRoute) {
-      // If already logged in, redirect away from login screen
-      if (user && !user.business_id) {
-        router.replace('/onboarding');
-      } else {
+      if (user?.role === 'super_admin' || isBizInitialized) {
         router.replace('/');
+      } else {
+        router.replace('/onboarding');
       }
     } else if (hasAuth && !isPublicRoute && pathname !== '/onboarding') {
-      // If logged in but business is not set up
-      if (user && !user.business_id) {
+      if (user?.role !== 'super_admin' && !isBizInitialized) {
         router.replace('/onboarding');
       } else {
         setLoading(false);
@@ -44,7 +91,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     } else {
       setLoading(false);
     }
-  }, [isAuthenticated, user, pathname, router, mounted]);
+  }, [mounted, isBizChecked, isBizInitialized, pathname, router, user]);
 
   if (!mounted) {
     return null;
@@ -85,3 +132,4 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   return <>{children}</>;
 }
+
