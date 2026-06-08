@@ -77,13 +77,30 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     if (!hasAuth && !isPublicRoute) {
       router.replace('/login');
     } else if (hasAuth && isPublicRoute) {
-      if (user?.role === 'super_admin' || isBizInitialized) {
+      if (user?.role === 'super_admin') {
+        router.replace('/admin/overview');
+      } else if (isBizInitialized) {
         router.replace('/');
       } else {
         router.replace('/onboarding');
       }
     } else if (hasAuth && !isPublicRoute && pathname !== '/onboarding') {
-      if (user?.role !== 'super_admin' && !isBizInitialized) {
+      if (user?.role === 'super_admin') {
+        // Redirection block protecting standard workspace routes from admin access
+        const isStandardRoute = pathname === '/' || 
+                                pathname.startsWith('/pos') || 
+                                pathname.startsWith('/orders') || 
+                                pathname.startsWith('/customers') || 
+                                pathname.startsWith('/workflows') || 
+                                pathname.startsWith('/ai') ||
+                                pathname.startsWith('/inventory') ||
+                                pathname.startsWith('/analytics');
+        if (isStandardRoute) {
+          router.replace('/admin/overview');
+        } else {
+          setLoading(false);
+        }
+      } else if (!isBizInitialized) {
         router.replace('/onboarding');
       } else {
         setLoading(false);
