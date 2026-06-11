@@ -16,14 +16,6 @@ export default function TenantManagement() {
   const deleteMutation = useDeleteBusiness();
   const purgeMutation = usePurgeBusiness();
 
-  // Mock list fallbacks if db lists are empty
-  const mockTenants = [
-    { id: 'T-8942-X', name: 'TechFlow Industries Ltd.', slug: 'techflow', industry: 'Technology', mrr: 1450000, created_at: '2023-10-12', is_active: true, plan: 'Enterprise' },
-    { id: 'T-1124-A', name: 'AgriLogistics Group', slug: 'agrilogistics', industry: 'Logistics', mrr: 450000, created_at: '2024-01-05', is_active: true, plan: 'Growth' },
-    { id: 'T-4402-N', name: 'Nexus Retail Ventures', slug: 'nexus', industry: 'Retail', mrr: 0, created_at: '2023-04-18', is_active: false, plan: 'Starter' },
-    { id: 'T-9001-F', name: 'FinEdge Solutions Core', slug: 'finedge', industry: 'Finance', mrr: 3200000, created_at: '2022-11-30', is_active: true, plan: 'Enterprise' },
-  ];
-
   const handleToggleStatus = async (id: string) => {
     try {
       await toggleMutation.mutateAsync(id);
@@ -56,22 +48,29 @@ export default function TenantManagement() {
     }
   };
 
-  const hasRealData = data && data.data.length > 0;
-  const tenantsList = hasRealData 
-    ? data.data.map((b, idx) => ({
-        id: b.id,
-        name: b.name,
-        slug: b.slug,
-        industry: b.industry || 'General',
-        mrr: idx % 3 === 0 ? 1450000 : idx % 3 === 1 ? 450000 : 0,
-        created_at: new Date(b.created_at).toISOString().split('T')[0],
-        is_active: b.is_active,
-        plan: idx % 3 === 0 ? 'Enterprise' : idx % 3 === 1 ? 'Growth' : 'Starter',
-      }))
-    : mockTenants;
+  const tenantsList = data?.data
+    ? data.data.map((b) => {
+        let mrr = 0;
+        const planLower = (b.subscription_plan || 'free').toLowerCase();
+        if (planLower === 'enterprise') mrr = 120000;
+        else if (planLower === 'growth') mrr = 450000;
+        else if (planLower === 'starter') mrr = 15000;
 
-  const totalCount = hasRealData ? data.total : 42;
-  const totalPages = Math.ceil(totalCount / limit);
+        return {
+          id: b.id,
+          name: b.name,
+          slug: b.slug,
+          industry: b.industry || 'General',
+          mrr,
+          created_at: b.created_at ? new Date(b.created_at).toISOString().split('T')[0] : 'N/A',
+          is_active: b.is_active,
+          plan: b.subscription_plan || 'free',
+        };
+      })
+    : [];
+
+  const totalCount = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
   return (
     <div className="space-y-6">
@@ -130,63 +129,74 @@ export default function TenantManagement() {
                 </tr>
               </thead>
               <tbody>
-                {tenantsList.map((tenant) => (
-                  <tr key={tenant.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-all select-none">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-white font-bold text-sm tracking-wide">{tenant.name}</span>
-                        <span className="text-[10px] text-text-muted font-mono mt-0.5">ID: {tenant.id}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-text-primary capitalize">{tenant.plan}</td>
-                    <td className="px-6 py-4 font-mono text-white font-bold">₦ {tenant.mrr.toLocaleString()}</td>
-                    <td className="px-6 py-4 font-mono text-text-secondary">{tenant.created_at}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center text-[9px] font-extrabold px-2.5 py-0.5 rounded border uppercase tracking-widest ${
-                        tenant.is_active
-                          ? 'bg-success/15 border-success/30 text-success'
-                          : 'bg-danger/15 border-danger/30 text-danger'
-                      }`}>
-                        <span className={`w-1 h-1 rounded-full mr-1.5 ${tenant.is_active ? 'bg-success animate-ping' : 'bg-danger'}`} />
-                        {tenant.is_active ? 'Active' : 'Suspended'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end space-x-2.5">
-                        <button
-                          onClick={() => handleToggleStatus(tenant.id)}
-                          disabled={toggleMutation.isPending}
-                          className={`p-1.5 rounded transition-all cursor-pointer ${
-                            tenant.is_active 
-                              ? 'text-text-secondary hover:text-danger hover:bg-danger/10'
-                              : 'text-text-secondary hover:text-success hover:bg-success/10'
-                          }`}
-                          title={tenant.is_active ? 'Suspend Workspace' : 'Activate Workspace'}
-                        >
-                          {tenant.is_active ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                        </button>
-
-                        <button
-                          onClick={() => handleDelete(tenant.id)}
-                          disabled={deleteMutation.isPending}
-                          className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 rounded transition-all cursor-pointer"
-                          title="Soft Delete Tenant"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          onClick={() => handlePurge(tenant.id)}
-                          disabled={purgeMutation.isPending}
-                          className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/15 border border-transparent hover:border-danger/30 rounded transition-all cursor-pointer"
-                          title="Hard GDPR Purge"
-                        >
-                          <ShieldAlert className="w-4 h-4" />
-                        </button>
+                {tenantsList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-12 text-text-muted select-none">
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <AlertCircle className="w-8 h-8 text-text-muted" />
+                        <span className="text-sm font-semibold">No tenants found</span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  tenantsList.map((tenant) => (
+                    <tr key={tenant.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-all select-none">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-white font-bold text-sm tracking-wide">{tenant.name}</span>
+                          <span className="text-[10px] text-text-muted font-mono mt-0.5">ID: {tenant.id}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-text-primary capitalize">{tenant.plan}</td>
+                      <td className="px-6 py-4 font-mono text-white font-bold">₦ {tenant.mrr.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-mono text-text-secondary">{tenant.created_at}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center text-[9px] font-extrabold px-2.5 py-0.5 rounded border uppercase tracking-widest ${
+                          tenant.is_active
+                            ? 'bg-success/15 border-success/30 text-success'
+                            : 'bg-danger/15 border-danger/30 text-danger'
+                        }`}>
+                          <span className={`w-1 h-1 rounded-full mr-1.5 ${tenant.is_active ? 'bg-success animate-ping' : 'bg-danger'}`} />
+                          {tenant.is_active ? 'Active' : 'Suspended'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end space-x-2.5">
+                          <button
+                            onClick={() => handleToggleStatus(tenant.id)}
+                            disabled={toggleMutation.isPending}
+                            className={`p-1.5 rounded transition-all cursor-pointer ${
+                              tenant.is_active 
+                                ? 'text-text-secondary hover:text-danger hover:bg-danger/10'
+                                : 'text-text-secondary hover:text-success hover:bg-success/10'
+                            }`}
+                            title={tenant.is_active ? 'Suspend Workspace' : 'Activate Workspace'}
+                          >
+                            {tenant.is_active ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(tenant.id)}
+                            disabled={deleteMutation.isPending}
+                            className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 rounded transition-all cursor-pointer"
+                            title="Soft Delete Tenant"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => handlePurge(tenant.id)}
+                            disabled={purgeMutation.isPending}
+                            className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/15 border border-transparent hover:border-danger/30 rounded transition-all cursor-pointer"
+                            title="Hard GDPR Purge"
+                          >
+                            <ShieldAlert className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

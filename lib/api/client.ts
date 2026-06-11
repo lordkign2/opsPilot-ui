@@ -33,26 +33,31 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        try {
           const response = await axios.post(`${apiClient.defaults.baseURL}/api/v1/auth/refresh`, {
             refresh_token: refreshToken,
           });
 
-          const { access_token } = response.data;
-          localStorage.setItem('access_token', access_token);
+          const { access_token } = response.data?.data || response.data;
+          const newAccessToken = typeof access_token === 'string' ? access_token : response.data?.access_token;
+          if (newAccessToken) {
+            localStorage.setItem('access_token', newAccessToken);
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            return apiClient(originalRequest);
+          }
+        } catch (refreshError) {
+          // Refresh failed, fall through to redirect
+        }
+      }
 
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return apiClient(originalRequest);
-        }
-      } catch (refreshError) {
-        // Redirect to login if refresh fails
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
-        }
+      // If no refresh token or refresh failed, clear all auth storage and redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('auth-storage');
+        window.location.href = '/login';
       }
     }
 

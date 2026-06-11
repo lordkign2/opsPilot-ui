@@ -130,7 +130,7 @@ export function useAdminBusinesses(limit = 50, offset = 0) {
       });
       return {
         data: (response.data?.data || []) as BusinessTenant[],
-        total: response.data?.total || 0,
+        total: response.data?.meta?.total || 0,
       };
     },
   });
@@ -186,7 +186,7 @@ export function useAdminUsers(limit = 50, offset = 0) {
       });
       return {
         data: (response.data?.data || []) as PlatformUser[],
-        total: response.data?.total || 0,
+        total: response.data?.meta?.total || 0,
       };
     },
   });
@@ -255,7 +255,7 @@ export function useAdminGlobalWorkflows(limit = 100, offset = 0) {
       });
       return {
         data: (response.data?.data || []) as GlobalWorkflow[],
-        total: response.data?.total || 0,
+        total: response.data?.meta?.total || 0,
       };
     },
   });
@@ -310,3 +310,94 @@ export function useCreatePromptTemplate() {
     },
   });
 }
+
+// ── Global System Settings ───────────────────────────────────
+
+export interface SystemSettings {
+  global_mfa_requirement: boolean;
+  strict_password_complexity: boolean;
+  idle_session_timeout: number;
+  max_concurrent_sessions: number;
+  admin_ip_whitelist: string;
+  global_rate_limit: number;
+  allowed_cors_domains: string;
+  active_signing_keys_count: number;
+  platform_name: string;
+  contact_email: string;
+  operating_region: string;
+  local_currency: string;
+  system_timezone: string;
+  base_tax_rate: number;
+  maintenance_mode: boolean;
+  new_registrations: boolean;
+  debug_mode: boolean;
+  system_log_retention_days: number;
+  database_quota_gb: number;
+  database_used_gb: number;
+  media_storage_quota_gb: number;
+  media_storage_used_gb: number;
+}
+
+export function useAdminSettings() {
+  return useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/v1/admin/settings');
+      return response.data?.data as SystemSettings;
+    },
+  });
+}
+
+export function useUpdateAdminSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Partial<SystemSettings>) => {
+      const response = await apiClient.put('/api/v1/admin/settings', payload);
+      return response.data?.data as SystemSettings;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'system-health'] });
+    },
+  });
+}
+
+export interface BusinessLocation {
+  business_id: string;
+  name: string;
+  plan: string;
+  mrr: number;
+  lat: number;
+  lng: number;
+  is_active: boolean;
+}
+
+export interface LatencyDataPoint {
+  time: string;
+  latency: number;
+}
+
+export interface TelemetryData {
+  total_nrr: number;
+  churn_rate: number;
+  locations: BusinessLocation[];
+  latency_metrics: {
+    avg_latency: number;
+    p95_latency: number;
+    error_rate: number;
+    latency_distribution: LatencyDataPoint[];
+  };
+}
+
+export function useAdminTelemetry() {
+  return useQuery({
+    queryKey: ['admin', 'telemetry'],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/v1/admin/telemetry');
+      return response.data?.data as TelemetryData;
+    },
+    refetchInterval: 15000,
+  });
+}
+
+

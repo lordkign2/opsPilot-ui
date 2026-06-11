@@ -14,19 +14,22 @@ import {
   ShieldAlert,
   Settings,
   HelpCircle,
-  Zap
+  Zap,
+  Lock
 } from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
 import { cn } from '@/lib/utils';
 
 const adminNavItems = [
-  { name: 'Overview', href: '/admin/overview', icon: LayoutDashboard },
+  { name: 'Security Audit', href: '/admin/overview', icon: ShieldAlert },
   { name: 'Tenants', href: '/admin/tenants', icon: Building },
-  { name: 'Config', href: '/admin/config', icon: Sliders },
-  { name: 'Prompts', href: '/admin/prompts', icon: Terminal },
-  { name: 'Models', href: '/admin/models', icon: Cpu },
-  { name: 'Observability', href: '/admin/observability', icon: Activity },
+  { name: 'MFA Config', href: '/admin/mfa', icon: Lock },
+  { name: 'API Management', href: '/admin/prompts', icon: Terminal },
+  { name: 'Platform Settings', href: '/admin/platform', icon: Settings },
+  { name: 'System Telemetry', href: '/admin/observability', icon: Activity },
+  { name: 'Node Control', href: '/admin/models', icon: Cpu },
 ];
+
 
 export default function AdminSidebar() {
   const pathname = usePathname();

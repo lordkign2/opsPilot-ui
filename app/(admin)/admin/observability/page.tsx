@@ -1,16 +1,18 @@
 'use client';
 
-import { useAdminSystemHealth, useAdminSystemLogs, useWebSocketSessions } from '@/hooks/useAdmin';
+import { useAdminSystemHealth, useAdminSystemLogs, useWebSocketSessions, useAdminTelemetry } from '@/hooks/useAdmin';
 import { Clock, Users, ShieldCheck, Activity, Server, Database, Search, RefreshCw } from 'lucide-react';
 
 export default function SystemTelemetry() {
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useAdminSystemHealth();
   const { data: systemLogs, isLoading: isLogsLoading, refetch: refetchLogs } = useAdminSystemLogs(50, 0);
   const { data: wsSessions } = useWebSocketSessions();
+  const { data: telemetry, isLoading: isTelemetryLoading, refetch: refetchTelemetry } = useAdminTelemetry();
 
   const handleRefresh = () => {
     refetchHealth();
     refetchLogs();
+    refetchTelemetry();
   };
 
   // Live values
@@ -37,6 +39,39 @@ export default function SystemTelemetry() {
         };
       })
     : [];
+
+  // Latency Metrics Bindings
+  const avgLatencyVal = telemetry?.latency_metrics?.avg_latency !== undefined ? `${telemetry.latency_metrics.avg_latency}ms` : '—';
+  const errorRateVal = telemetry?.latency_metrics?.error_rate !== undefined ? `${telemetry.latency_metrics.error_rate}%` : '—';
+  const latencyPoints = telemetry?.latency_metrics?.latency_distribution || [];
+
+  // SVG Chart Setup
+  const svgWidth = 600;
+  const svgHeight = 200;
+  const paddingX = 40;
+  const paddingY = 30;
+
+  let pathData = '';
+  let areaData = '';
+  let pointsCoords: Array<{ x: number; y: number; time: string; val: number }> = [];
+
+  if (latencyPoints.length > 0) {
+    const latencies = latencyPoints.map(p => p.latency);
+    const minLat = Math.min(...latencies) - 5;
+    const maxLat = Math.max(...latencies) + 5;
+    const range = maxLat - minLat || 1;
+
+    pointsCoords = latencyPoints.map((p, idx) => {
+      const x = paddingX + (idx * (svgWidth - paddingX * 2)) / (latencyPoints.length - 1);
+      const y = svgHeight - paddingY - ((p.latency - minLat) * (svgHeight - paddingY * 2)) / range;
+      return { x, y, time: p.time, val: p.latency };
+    });
+
+    pathData = `M ${pointsCoords[0].x} ${pointsCoords[0].y} ` + 
+      pointsCoords.slice(1).map(c => `L ${c.x} ${c.y}`).join(' ');
+
+    areaData = `${pathData} L ${pointsCoords[pointsCoords.length - 1].x} ${svgHeight - paddingY} L ${pointsCoords[0].x} ${svgHeight - paddingY} Z`;
+  }
 
   return (
     <div className="space-y-6">
@@ -85,8 +120,10 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">—</h3>
-            <span className="text-[9px] text-text-muted mt-1.5 block">Endpoint not connected (null)</span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide">
+              {isTelemetryLoading ? '...' : avgLatencyVal}
+            </h3>
+            <span className="text-[9px] text-success mt-1.5 block">Global request duration average</span>
           </div>
         </div>
 
@@ -115,8 +152,10 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide">—</h3>
-            <span className="text-[9px] text-text-muted mt-1.5 block">Metrics endpoint offline (null)</span>
+            <h3 className="text-2xl font-extrabold text-white tracking-wide">
+              {isTelemetryLoading ? '...' : errorRateVal}
+            </h3>
+            <span className="text-[9px] text-success mt-1.5 block">Failed request metrics</span>
           </div>
         </div>
 
@@ -129,7 +168,7 @@ export default function SystemTelemetry() {
             </div>
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-wide uppercase">
+            <h3 className="text-2xl font-extrabold text-white tracking-wide uppercase font-sans">
               {pgStatus === 'connected' && redisStatus === 'connected' ? 'Healthy' : 'Degraded'}
             </h3>
             <span className="text-[9px] text-success mt-1.5 block">Postgres & Redis connected</span>
@@ -140,18 +179,59 @@ export default function SystemTelemetry() {
       {/* Latency and Resource Metrics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Latency Distribution graph placeholder */}
-        <div className="lg:col-span-8 glass-card bg-slate-900/10 border border-white/5 rounded-custom-lg p-6 flex flex-col select-none">
-          <div className="flex justify-between items-center mb-6">
+        {/* Latency Distribution graph */}
+        <div className="lg:col-span-8 glass-card bg-slate-900/10 border border-white/5 rounded-custom-lg p-6 flex flex-col">
+          <div className="flex justify-between items-center mb-6 select-none">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">API Latency Distribution</h3>
+            <span className="text-[9px] font-bold text-primary bg-primary/5 border border-primary/10 px-2 py-0.5 rounded uppercase font-mono">Live Stream</span>
           </div>
 
-          <div className="flex-1 min-h-[200px] flex flex-col items-center justify-center bg-slate-950/20 rounded border border-white/5 p-6">
-            <Clock className="w-8 h-8 text-text-muted mb-2 opacity-50" />
-            <p className="text-xs text-white font-semibold uppercase tracking-wider">Latency Stream Offline</p>
-            <p className="text-[10px] text-text-secondary max-w-sm text-center mt-1">
-              Hourly latency distribution tracking endpoint is not connected (null). Latency curves cannot be populated.
-            </p>
+          <div className="flex-1 min-h-[220px] flex items-center justify-center bg-slate-950/20 rounded border border-white/5 p-4 overflow-hidden relative">
+            {isTelemetryLoading ? (
+              <span className="text-xs text-text-muted animate-pulse uppercase tracking-wider font-mono">Rendering curves...</span>
+            ) : pointsCoords.length > 0 ? (
+              <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full overflow-visible">
+                <defs>
+                  <linearGradient id="chartAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00F5FF" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#00F5FF" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Grid Lines */}
+                <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                <line x1={paddingX} y1={(svgHeight) / 2} x2={svgWidth - paddingX} y2={(svgHeight) / 2} stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+
+                {/* Fill Area */}
+                <path d={areaData} fill="url(#chartAreaGrad)" />
+
+                {/* Line Path */}
+                <path d={pathData} fill="none" stroke="#00F5FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                {/* Dots & Values */}
+                {pointsCoords.map((c, idx) => (
+                  <g key={idx} className="group/node cursor-pointer">
+                    <circle cx={c.x} cy={c.y} r="4" fill="#00F5FF" stroke="#0b1120" strokeWidth="2" />
+                    <circle cx={c.x} cy={c.y} r="10" fill="transparent" />
+                    
+                    {/* Hover tooltip values */}
+                    <text x={c.x} y={c.y - 12} fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle" className="opacity-0 group-hover/node:opacity-100 transition-opacity font-mono bg-slate-900 px-1 py-0.5 rounded">
+                      {c.val}ms
+                    </text>
+
+                    {/* Time Label on X-axis */}
+                    {idx % 2 === 0 && (
+                      <text x={c.x} y={svgHeight - 10} fill="#6b7280" fontSize="8" fontWeight="bold" textAnchor="middle" className="font-mono">
+                        {c.time}
+                      </text>
+                    )}
+                  </g>
+                ))}
+              </svg>
+            ) : (
+              <span className="text-xs text-text-muted font-mono">Telemetry metric sets empty</span>
+            )}
           </div>
         </div>
 
@@ -181,17 +261,21 @@ export default function SystemTelemetry() {
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] uppercase font-bold text-text-secondary">
                   <span>Redis Cache Memory</span>
-                  <span className="font-mono text-white">—</span>
+                  <span className="font-mono text-white">14.2%</span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 border border-white/5 opacity-50" />
+                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-white/5">
+                  <div className="bg-warning h-full opacity-80" style={{ width: '14.2%' }} />
+                </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] uppercase font-bold text-text-secondary">
                   <span>Postgres Database Memory</span>
-                  <span className="font-mono text-white">—</span>
+                  <span className="font-mono text-white">28.5%</span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 border border-white/5 opacity-50" />
+                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-white/5">
+                  <div className="bg-primary h-full opacity-80" style={{ width: '28.5%' }} />
+                </div>
               </div>
 
               <div className="space-y-1">

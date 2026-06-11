@@ -110,6 +110,60 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   }, [mounted, isBizChecked, isBizInitialized, pathname, router, user]);
 
+  // WebSocket presence tracking loop
+  useEffect(() => {
+    if (!mounted || !isAuthenticated) return;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+
+    const connect = () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+        if (!token) {
+          console.warn('WebSocket connection deferred: Access token missing.');
+          reconnectTimeout = setTimeout(connect, 5000);
+          return;
+        }
+
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const wsBase = apiBase.replace(/^http/, 'ws');
+        const wsUrl = `${wsBase}/api/v1/ws?token=${token}`;
+
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          console.log('OpsPilot Dashboard WebSocket Connected');
+        };
+
+        socket.onclose = () => {
+          console.log('OpsPilot Dashboard WebSocket Disconnected. Reconnecting in 5s...');
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+
+        socket.onerror = (err) => {
+          console.error('OpsPilot Dashboard WebSocket Error', err);
+          socket?.close();
+        };
+      } catch (err) {
+        console.error('Failed to create WebSocket instance', err);
+        reconnectTimeout = setTimeout(connect, 5000);
+      }
+    };
+
+    connect();
+
+    return () => {
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [mounted, isAuthenticated]);
+
   if (!mounted) {
     return null;
   }
