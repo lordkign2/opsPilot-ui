@@ -90,10 +90,12 @@ export default function AuthPage() {
       setAuth(user, tokens.access_token, tokens.refresh_token);
 
       // If user doesn't have business_id set or operational domain initialized, route to onboarding
-      if (!user.business_id) {
+      if (user.role === 'super_admin') {
+        router.push('/admin/overview');
+      } else if (!user.business_id) {
         router.push('/onboarding');
       } else {
-        router.push('/dashboard');
+        router.push('/');
       }
     } catch (err: any) {
       setApiError(err.response?.data?.message || err.response?.data?.detail || 'Invalid email or password');

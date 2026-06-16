@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
 
 @theme {
   --color-background: #0b1120;
@@ -49,12 +51,12 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #f3f4f6;
   transition: all 0.2s ease;
-}
 
-@utility glass-input:focus {
-  border-color: #00F5FF;
-  box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
-  outline: none;
+  &:focus {
+    border-color: #00F5FF;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
+    outline: none;
+  }
 }
 
 /* Scrollbars */
@@ -75,5 +77,23 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* Leaflet Cyberpunk Popup Customizations */
+.custom-popup-box .leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f3f4f6 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 0.5rem !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+.custom-popup-box .leaflet-popup-tip {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.custom-popup-box .leaflet-popup-content {
+  margin: 0 !important;
+}
+
 
 
